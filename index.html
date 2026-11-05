@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAMZO - Dynamic Riders Tracking</title>
+    <!-- Leaflet CSS (نقشے کے لیے) -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <!-- FontAwesome (آئیکنز کے لیے) -->
+    <link rel="stylesheet" href="https://cloudflare.com" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #ece5dd; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* واٹس ایپ اسٹائل ہیڈر */
+        .header { background-color: #075e54; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .header-title { display: flex; align-items: center; gap: 10px; }
+        .header-title i { font-size: 24px; }
+        .header-title h1 { font-size: 20px; font-weight: 600; }
+        
+        /* نیا ممبر شامل کرنے کا بٹن */
+        .add-btn { background-color: #25d366; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 14px; }
+        .add-btn:hover { background-color: #20ba59; }
+
+        /* مین کنٹینر */
+        .container { flex: 1; display: flex; flex-direction: column; padding: 10px; gap: 10px; overflow-y: auto; }
+
+        /* کارڈز کا ڈیزائن */
+        .rider-card { background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 12px; }
+        .rider-info { display: flex; align-items: center; gap: 15px; }
+        .rider-avatar { width: 50px; height: 50px; background: #128c7e; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
+        .rider-details { flex: 1; }
+        .rider-name { font-size: 18px; font-weight: bold; color: #333; }
+        .rider-phone { font-size: 14px; color: #666; margin-top: 2px; }
+
+        /* بٹنز کا کنٹینر */
+        .actions { display: flex; gap: 10px; }
+        .btn { flex: 1; padding: 10px; border: none; border-radius: 5px; font-weight: bold; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; transition: 0.2s; }
+        .btn-call { background-color: #128c7e; color: white; }
+        .btn-call:hover { background-color: #0b695e; }
+        .btn-location { background-color: #34b7f1; color: white; }
+        .btn-location:hover { background-color: #1fa2de; }
+
+        /* فارم کا پاپ اپ */
+        .form-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; padding: 20px; }
+        .form-content { background: white; padding: 20px; border-radius: 10px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; }
+        .form-content h2 { font-size: 18px; color: #075e54; }
+        .form-content input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .btn-cancel { background: #e5e5e5; color: #333; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; }
+        .btn-save { background: #075e54; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; }
+
+        /* میپ موڈل */
+        #map-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1000; flex-direction: column; }
+        #map { flex: 1; width: 100%; }
+        .map-close { background: #075e54; color: white; padding: 15px; font-weight: bold; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- ایپ ہیڈر -->
+    <div class="header">
+        <div class="header-title">
+            <i class="fab fa-whatsapp"></i>
+            <h1>FAMZO Tracking</h1>
+        </div>
+        <button class="add-btn" onclick="openForm()"><i class="fas fa-plus"></i> شامل کریں</button>
+    </div>
+
+    <!-- رائیڈرز کی لسٹ یہاں نظر آئے گی -->
+    <div class="container" id="riders-list">
+        <!-- جب ایپ شروع ہوگی تو یہ خالی ہوگی، صارف خود ایڈ کرے گا -->
+    </div>
+
+    <!-- نیا ممبر شامل کرنے کا فارم -->
+    <div class="form-modal" id="form-modal">
+        <div class="form-content">
+            <h2>نیا ممبر شامل کریں</h2>
+            <input type="text" id="rider-name-input" placeholder="نام لکھیں (مثال: احمد)">
+            <input type="tel" id="rider-phone-input" placeholder="فون نمبر (مثال: +923001234567)">
+            <div class="form-actions">
+                <button class="btn-cancel" onclick="closeForm()">کینسل</button>
+                <button class="btn-save" onclick="addRider()">شامل کریں</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نقشہ کا پاپ اپ -->
+    <div id="map-container">
+        <div class="map-close" onclick="closeMap()">
+            <i class="fas fa-arrow-left"></i> واپس جائیں
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <!-- Leaflet Map JS -->
+    <script src="https://unpkg.com"></script>
+    <script>
+        let map;
+        let marker;
+
+        // فارم کھولنے اور بند کرنے کے فنکشنز
+        function openForm() { document.getElementById('form-modal').style.display = 'flex'; }
+        function closeForm() { document.getElementById('form-modal').style.display = 'none'; clearForm(); }
+        function clearForm() { document.getElementById('rider-name-input').value = ''; document.getElementById('rider-phone-input').value = ''; }
+
+        // لسٹ میں نیا رائیڈر شامل کرنے کا فنکشن
+        function addRider() {
+            const name = document.getElementById('rider-name-input').value.trim();
+            const phone = document.getElementById('rider-phone-input').value.trim();
+
+            if (name === "" || phone === "") {
+                alert("براہ کرم نام اور فون نمبر دونوں درج کریں!");
+                return;
+            }
+
+            const list = document.getElementById('riders-list');
+            const avatarLetter = name.charAt(0).toUpperCase();
+
+            // عارضی طور پر ہر نئے رائیڈر کو ایک رینڈم لوکیشن دے رہے ہیں (ٹیسٹنگ کے لیے)
+            const randomLat = 31.5204 + (Math.random() - 0.5) * 0.1;
+            const randomLng = 74.3587 + (Math.random() - 0.5) * 0.1;
+
+            const cardHtml = `
+                <div class="rider-card">
+                    <div class="rider-info">
+                        <div class="rider-avatar">${avatarLetter}</div>
+                        <div class="rider-details">
+                            <div class="rider-name">${name}</div>
+                            <div class="rider-phone"><i class="fas fa-phone-alt" style="font-size:12px; color:#128c7e;"></i> ${phone}</div>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <a href="tel:${phone}" class="btn btn-call"><i class="fas fa-phone"></i> کال کریں</a>
+                        <button class="btn btn-location" onclick="showRiderLocation(${randomLat}, ${randomLng}, '${name}')"><i class="fas fa-map-marker-alt"></i> لوکیشن دیکھیں</button>
+                    </div>
+                </div>
+            `;
+
+            list.innerHTML += cardHtml;
+            closeForm();
+        }
+
+        // نقشہ لوڈ کرنے کا فنکشن
+        function showRiderLocation(lat, lng, riderName) {
+            document.getElementById('map-container').style.display = 'flex';
+            
+            if (!map) {
+                map = L.map('map').setView([lat, lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+            } else {
+                map.setView([lat, lng], 13);
+            }
+
+            if (marker) map.removeLayer(marker);
+            marker = L.marker([lat, lng]).addTo(map)
+                .bindPopup(riderName + " کی موجودہ لوکیشن")
+                .openPopup();
+        }
+
+        function closeMap() {
+            document.getElementById('map-container').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
